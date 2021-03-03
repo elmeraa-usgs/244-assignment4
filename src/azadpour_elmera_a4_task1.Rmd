@@ -1,0 +1,33 @@
+---
+title: 'Task 1: Agglomerative hierarchical clustering'
+author: "Elmera Azadpour"
+date: "3/2/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+library(janitor)
+# Packages for cluster analysis:
+library(NbClust)
+library(cluster)
+library(factoextra)
+library(dendextend)
+library(ggdendro)
+```
+
+### Read in data
+```{r}
+stream_chem <- read_csv(here("data","sbc_lter_registered_stream_chemistry.csv")) %>% 
+  clean_names() %>% 
+  na_if(-999.0) %>% 
+  group_by(site_code) %>% 
+  summarise(across(nh4_u_m:spec_cond_u_spercm, mean, na.rm = TRUE))
+```
+
+```{r}
+
+```
+
