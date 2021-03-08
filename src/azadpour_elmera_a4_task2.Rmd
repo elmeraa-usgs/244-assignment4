@@ -1,0 +1,143 @@
+---
+title: "Task 2: Nonlinear least squares parameter estimation – wild fish catch"
+author: "Elmera Azadpour"
+date: "3/3/2021"
+output: 
+  html_document: 
+    theme: paper
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+library(janitor)
+library(boot)
+library(gt)
+library(patchwork)
+library(broom)
+library(nlstools)
+library(kableExtra)
+```
+
+### Read in the data
+```{r}
+fish_catch <- read_csv(here("data","fish_catch.csv"), skip = 2) %>% 
+  tail(-2) %>% 
+  drop_na() %>% 
+  mutate(year = 0:62) %>% 
+  clean_names()
+
+``` 
+
+### Exploratory graphs
+```{r}
+# Look at data:
+fish_catch$wild_catch =  as.numeric(fish_catch$wild_catch)
+fish_catch$year_2 =  as.numeric(fish_catch$year_2)
+
+ggplot(data = fish_catch, aes(x = year_2, y= wild_catch)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "Time (year)", y = "Fish catch (million tons)")
+
+## look at log transformed data:
+fish_catch$wild_catch = as.numeric(fish_catch$wild_catch)
+ggplot(data = fish_catch, aes(x = year_2, y=log(wild_catch))) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "Time (year)", y = "Log fish catch (million tons)")
+```
+
+What type of relationship describes the trend? What does that look like mathematically (include an equation, possibly using LaTeX)? What are your initial estimates for the parameters in the model?
++ This appears to be a logistic trend, where we see fish catch increasing until rougly year 45 and catch around 95. There appears to be a carrying capacity (K) at the fish catch around 95. It also appears to be exponential growth until roughly year 18. Below we'll explore initial estimates for the parameters in the model. First, let's define variables in the logistic growth equation. 
+
+The logistic growth equation: 
+
+$P(t)=\frac{K}{1+Ae^{-kt}}$, where
+
+- $K$ is the carrying capacity
+- $A$ is $\frac{K-P_0}{P_0}$
+- $k$ is the growth rate constant
+
+### Find initial estimates for *K*, *A* and *k*
+```{r}
+# Get only up to 18 years & log transform the wild_catch
+# We do this so we can estimate the growth rate constant (k) *during exponential growth phase)
+fishcatch_exp <- fish_catch %>% 
+  filter(year_2 < 18) %>% 
+  mutate(ln_wildcatch = log(wild_catch))
+
+
+# Model linear to get *k* estimate (the slope of this linear equation is an estimate of the growth rate constant):
+lm_k_fish <- lm(ln_wildcatch ~ year_2, data = fishcatch_exp)
+lm_k_fish
+
+# Coefficient (k) ~ 0.05896
+```
+
+### Nonlinear least squares (NLS)
+```{r}
+fish_nls <- nls(wild_catch ~ K/(1 + A*exp(-r*year_2)),
+              data = fish_catch,
+              start = list(K = 95, A = 4.5, r = 0.06),
+              trace = TRUE
+              )
+## A was calcluated via A = (K - p0/ p0) --> A = (95 - 17.2)/17.2 = ~4.5
+
+# See the model summary (null hypothesis: parameter value = 0)
+summary(fish_nls)
+
+# Use broom:: functions to get model outputs in tidier format: 
+model_out <- broom::tidy(fish_nls) # Use View(model_out) to see the tidy model output.
+
+# Want to just get one of these?  
+A_est <- model_out$estimate[2] # Gets the first rown in the estimate column.'
+
+```
+
+Our model with estimated parameters is:
+$$P(t) = \frac{100.3}{1+4.3e^{-0.07t}}$$
+
+### Table of NLS output
+```{r}
+model_out %>% 
+  kable(col.names = c("Term",
+                      "Estimate",
+                      "St Error",
+                      "t-statistic",
+                      "p-value")) %>% 
+  kable_styling(full_width = FALSE)
+```
+
+
+
+### Visualize model over original observed values
+```{r}
+# Make predictions for the population at all of those times (time) in the original df: 
+p_predict <- predict(fish_nls)
+
+# Bind predictions to original data frame:
+df_complete <- data.frame(fish_catch, p_predict)
+
+# Plot them all together:
+ggplot(data = df_complete, aes(x = year_2, y = wild_catch)) +
+  geom_point() +
+  geom_line(aes(x = year_2, y = p_predict),  col = "red", size = 1) +
+  theme_minimal() +
+  labs(x = "Time (years)", y= "Wild Fish Catch (Million Tons)",
+       title = "Nonlinear least squares model for the increase in global wild fish catch from 1950 - 2012")
+```
+
+
+```{r}
+df_fish <- confint2(fish_nls)
+df_fish
+```
+
+
+### Citation:
++ Source: Global wild fish catch and aquaculture production, compiled by Earth Policy Institute with 1950-2010 from U.N. Food and Agriculture Organization (FAO), Global Capture Production and Global Aquaculture Production, electronic databases, at www.fao.org/fishery/topic/16140/en.

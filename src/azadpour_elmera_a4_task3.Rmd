@@ -1,0 +1,114 @@
+---
+title: "Task 3: Bootstrapped Confidence Interval for Proportions"
+author: "Elmera Azadpour"
+date: "3/3/2021"
+output: 
+  html_document: 
+    theme: paper
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(boot)
+library(patchwork)
+```
+
+### Load vector of data 
+```{r}
+nb <- rnorm(mean=.61, sd=1, n=36)
+plot(nb)
+nb = data.frame(nb)
+mean(nb$nb)
+
+a = replicate(22, 1)
+b = replicate(14, 0)
+c = c(a,b)
+mean(c)
+nb <- as.data.frame(c) %>%  
+  rename("n" = "c") 
+
+nb$n = as.numeric(nb$n)
+
+```
+
+## Summary statistics from samples:
+```{r}
+mean(nb$n)
+t.test(nb$n)
+hist(nb$n)
+```
+
+### Creating bootstrapping 
+```{r}
+# first, create a function that will calculate the mean of each bootstrapped sample
+mean_fun <- function (x,i) {mean(x[i])}
+
+# then, get the vector of salinity (salinity$sal)
+nonbinary_nc <- nb$n
+
+# create 100 bootstrap samples by resampling from the salinity vector, using the function you created to calculate the mean of each
+nonbinaryboot_100 <- boot(nonbinary_nc, 
+                    statistic = mean_fun,
+                    R = 100)
+
+# for comparison, let's also create 10000 bootstrap samples with replacement
+nonbinaryboot_10k <- boot(nonbinary_nc, 
+                 statistic = mean_fun, 
+                 R = 10000)
+
+# for comparison, let's also create 100,000 bootstrap samples with replacement
+nonbinaryboot_100000 <- boot(nonbinary_nc, 
+                 statistic = mean_fun, 
+                 R = 100000)
+
+# check out output of bootstrap:
+nonbinaryboot_100
+nonbinaryboot_10k
+nonbinaryboot_100000
+
+# in order to get the same output we would need to use set.seed() 
+```
+
+### Look at bootstrap samples using `t0` (to see oringal sample mean) on `t` (to see the means of bootstraps)
+```{r, warning =FALSE, results="hide"}
+nonbinaryboot_100$t0 # the original sample mean
+nonbinaryboot_10k$t # the means for each of the 100 bootstrap samples
+nonbinaryboot_100000$t # more means
+
+# make vectors of bootstrap sample means a data frame (so ggplot will deal with it).
+nonbinaryboot_100_df <- data.frame(bs_mean = nonbinaryboot_100$t)
+nonbinaryboot_10k_df <- data.frame(bs_mean = nonbinaryboot_10k$t)
+nonbinaryboot_100000_df <- data.frame(bs_mean = nonbinaryboot_100000$t)
+
+## ggplot the bootstrap sample mediansL
+# the histogram of the original sample:
+p1 <- ggplot(data = nb, aes(x = n)) +
+  geom_histogram()
+
+# histogram of 100 bootstrap sample means:
+p2 <- ggplot(data = nonbinaryboot_100_df, aes(x = bs_mean)) +
+  geom_histogram()
+
+# histogram of 10k bootstrap sample means:
+p3 <- ggplot(data = nonbinaryboot_10k_df, aes(x = bs_mean)) +
+  geom_histogram()
+
+p4 <- ggplot(data = nonbinaryboot_100000_df, aes(x = bs_mean)) +
+  geom_histogram()
+
+# use {patchwork} 
+(p1 + p2) / (p3 + p4) & theme_minimal()
+```
+
+### Use `boot.ci()` to find the CI for the bootstrapped distribution (here, with the 10k & 100,000 bootstrapped means):
+```{r}
+boot.ci(nonbinaryboot_10k, conf = 0.95, type = c("perc"))
+boot.ci(nonbinaryboot_100000, conf = 0.95, type = c("perc"))
+```
+
+
+### Bootstrapped CI:
++ Based on the `boots.ci` output, we find that the CI percentile ranges from 0.44 to 0.78 or 44 to 78%. For a 95% confidence interval, that means we expect that 95 of 100 calculated confidence intervals will contain the actual population parameter. 

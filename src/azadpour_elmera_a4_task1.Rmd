@@ -2,7 +2,12 @@
 title: 'Task 1: Agglomerative hierarchical clustering'
 author: "Elmera Azadpour"
 date: "3/2/2021"
-output: html_document
+output: 
+  html_document: 
+    theme: paper
+    toc: true
+    toc_float: true
+    code_folding: hide
 ---
 
 ```{r setup, include=FALSE}
@@ -19,15 +24,61 @@ library(ggdendro)
 ```
 
 ### Read in data
-```{r}
+```{r, results = "hide"}
 stream_chem <- read_csv(here("data","sbc_lter_registered_stream_chemistry.csv")) %>% 
   clean_names() %>% 
   na_if(-999.0) %>% 
   group_by(site_code) %>% 
-  summarise(across(nh4_u_m:spec_cond_u_spercm, mean, na.rm = TRUE))
+  summarise(across(nh4_u_m:spec_cond_u_spercm, mean, na.rm = TRUE)) %>% 
+  drop_na()
 ```
 
+### Scale the data 
 ```{r}
+## scale the numeric variables
+stream_chem_scaled <- stream_chem %>% 
+  select(2:11) %>% 
+  scale()
 
+## make rownames the site code names from original data set
+rownames(stream_chem_scaled) <- stream_chem$site_code
+
+# Compute dissimilarity values (Euclidean distances):
+stream_euc_distance <- dist(stream_chem_scaled, method = "euclidean")
+
+# Check out the output:
+# View(euc_distance)
 ```
 
+### Perform hierarchical clustering by complete linkage with `stats::hclust()`
+```{r}
+# Hierarchical clustering (complete linkage)
+stream_hc_complete <- hclust(stream_euc_distance, method = "complete" )
+
+# Plot it (base plot):
+plot(stream_hc_complete, cex = 0.6, hang = -1)
+```
+
+### Convert to class: dendogram
+```{r}
+stream_dend_complete <- as.dendrogram(stream_hc_complete)
+```
+
+### Plot using `ggdendrogram()`, a `ggplot` wrapper: 
+```{r}
+# ggplot 
+ggdendrogram(stream_dend_complete, 
+             rotate = TRUE) +
+  theme_minimal() +
+  labs(x = "Santa Barbara area watershed site code") +
+  ylab(NULL)
+```
+
+
+### Citation/Link to Data: 
++ Link to the data: https://drive.google.com/file/d/16rYLBi-CgvjcWhOsX1SLdD9HHUMP9m2l/view?usp=sharing
+
++ Data & Metadata source: 
+SBC LTER: Stream chemistry in the Santa Barbara Coastal drainage area, ongoing since 2000
+Creators: Santa Barbara Coastal LTER, & Melack, John M
+Citation: Santa Barbara Coastal LTER and J. Melack. 2019. SBC LTER: Land: Stream chemistry in the Santa Barbara Coastal drainage area, ongoing since 2000 ver 16. Environmental Data Initiative. https://doi.org/10.6073/pasta/67a558a24ceed9a0a5bf5e46ab841174. 
